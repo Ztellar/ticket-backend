@@ -1,0 +1,17 @@
+# Dependencies
+node_modules
+
+# Visual Studio Code
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+dist
+dist-ssr
+*.local
