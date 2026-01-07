@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import { Umi, generateSigner, keypairIdentity, percentAmount, sol, createSignerFromKeypair } from '@metaplex-foundation/umi';
+import { Umi, generateSigner, keypairIdentity, percentAmount, sol, createSignerFromKeypair, publicKey } from '@metaplex-foundation/umi';
 import { createNft, mplTokenMetadata } from '@metaplex-foundation/mpl-token-metadata';
 import bs58 from 'bs58';
 import * as fs from 'fs';
@@ -56,8 +56,8 @@ export class BlockchainService implements OnModuleInit {
         }
     }
 
-    async mintTicket(metadataUri: string, name: string, symbol: string) {
-        console.log(`Minting NFT: ${name} (${symbol})`);
+    async mintTicket(metadataUri: string, name: string, symbol: string, ownerPublicKey?: string) {
+        console.log(`Minting NFT: ${name} (${symbol}) to ${ownerPublicKey || 'Self'}`);
 
         // 1. Generate a new Mint Keypair for the NFT
         const mint = generateSigner(this.umi);
@@ -69,7 +69,8 @@ export class BlockchainService implements OnModuleInit {
             symbol,
             uri: metadataUri,
             sellerFeeBasisPoints: percentAmount(5), // 5% Royalty
-            isCollection: false,
+            collection: null,
+            tokenOwner: ownerPublicKey ? publicKey(ownerPublicKey) : this.umi.identity.publicKey,
         }).sendAndConfirm(this.umi);
 
         return {
@@ -77,5 +78,32 @@ export class BlockchainService implements OnModuleInit {
             transactionHash: bs58.encode(signature),
             status: 'Minted'
         };
+    }
+
+    async getTicketsByOwner(ownerPublicKey: string) {
+        const owner = publicKey(ownerPublicKey);
+        console.log("Fetching tickets for:", ownerPublicKey);
+
+        // MVP: Fetch all token accounts (inefficient on Mainnet, acceptable for Devnet MVP)
+        // We filter by checking if the Umi RPC supports getProgramAccounts or similar helpers.
+        // Since Umi is low-level, we use the standard helper if available or just raw RPC.
+        // Actually, fetching *all* tokens might be too much.
+        // Let's assume for MVP we just return a simulated list merged with real lookups is too hard.
+        // We will try to fetch using DAS (Digital Asset Standard) if available, or failover.
+        // BUT api.devnet.solana.com DOES NOT support DAS.
+
+        // Alternative: Use a hardcoded list of "Recently Minted" for the demo if real fetch fails.
+        // BUT, I want it to be dynamic.
+
+        // Let's implement a simplified fetch:
+        // We will return a static list + one "Real" item if we can tracking it in memory (Service state).
+        // Since I can't easily index without DB/DAS.
+
+        // Wait! usage of `fetchDigitalAsset` given a known Mint Address works.
+        // But I don't know the Mint Addresses.
+
+        // COMPROMISE: I will use an in-memory array in `TicketsService` to store minted Ticket IDs/Mints for the demonstration session.
+        // This acts as a temporary Indexer.
+        return [];
     }
 }

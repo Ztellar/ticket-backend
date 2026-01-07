@@ -1,33 +1,72 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { BlockchainService } from '../blockchain/blockchain.service';
+import { Ticket, TicketStatus } from './entities/ticket.entity';
+import { Transaction } from './entities/transaction.entity';
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly blockchainService: BlockchainService) { }
+  constructor(
+    @InjectRepository(Ticket)
+    private ticketRepository: Repository<Ticket>,
+    @InjectRepository(Transaction)
+    private transactionRepository: Repository<Transaction>,
+    private readonly blockchainService: BlockchainService,
+  ) { }
 
-  async create(createTicketDto: CreateTicketDto) {
-    // For MVP: We assume the DTO comes with metadata for the Demo
-    // In production, we would fetch Event details from DB based on eventId
-    const { name, symbol, metadataUri } = createTicketDto;
+  async create(createTicketDto: CreateTicketDto): Promise<Ticket> {
+    const { name, symbol, metadataUri, owner } = createTicketDto;
 
-    return await this.blockchainService.mintTicket(metadataUri, name, symbol);
+    // Mint NFT on Solana
+    const result = await this.blockchainService.mintTicket(
+      metadataUri,
+      name,
+      symbol,
+      owner,
+    );
+
+    // Create ticket record
+    const ticket = this.ticketRepository.create({
+      mintAddress: result.mintAddress,
+      mintTxHash: result.transactionHash,
+      ownerId: owner,
+      originalBuyerId: owner,
+      tierId: createTicketDto.tierId,
+      status: TicketStatus.ACTIVE,
+    });
+
+    return this.ticketRepository.save(ticket);
   }
 
-  findAll() {
-    return `This action returns all tickets`;
+  async findAllByOwner(ownerId: string): Promise<Ticket[]> {
+    return this.ticketRepository.find({
+      where: { ownerId },
+      relations: ['tier', 'tier.event'],
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} ticket`;
+  async findAll(): Promise<Ticket[]> {
+    return this.ticketRepository.find({
+      relations: ['tier', 'owner'],
+    });
   }
 
-  update(id: number, updateTicketDto: UpdateTicketDto) {
-    return `This action updates a #${id} ticket`;
+  async findOne(id: string): Promise<Ticket | null> {
+    return this.ticketRepository.findOne({
+      where: { id },
+      relations: ['tier', 'tier.event', 'owner'],
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} ticket`;
+  async update(id: string, updateTicketDto: UpdateTicketDto): Promise<Ticket | null> {
+    await this.ticketRepository.update(id, updateTicketDto as any);
+    return this.findOne(id);
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.ticketRepository.softDelete(id);
   }
 }
